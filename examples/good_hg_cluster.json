@@ -1,0 +1,16 @@
+{
+  "_comment": "Cluster Hg2+ bem-formado: duas águas reais (O + 2 H), carga +2, singleto, Hg com ECP LANL2DZ. Deve passar limpo.",
+  "atoms": [
+    { "element": "Hg", "x": 0.0,  "y": 0.0,  "z": 0.0 },
+    { "element": "O",  "x": 2.30, "y": 0.0,  "z": 0.0 },
+    { "element": "H",  "x": 2.60, "y": 0.80, "z": 0.0 },
+    { "element": "H",  "x": 2.60, "y": -0.80,"z": 0.0 },
+    { "element": "O",  "x": -2.30,"y": 0.0,  "z": 0.0 },
+    { "element": "H",  "x": -2.60,"y": 0.80, "z": 0.0 },
+    { "element": "H",  "x": -2.60,"y": -0.80,"z": 0.0 }
+  ],
+  "charge": 2,
+  "spin_multiplicity": 1,
+  "ecp_elements": ["Hg"],
+  "metal_oxidation_state": 2
+}

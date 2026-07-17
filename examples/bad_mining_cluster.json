@@ -1,0 +1,13 @@
+{
+  "_comment": "O bug real da auditoria de mineração: 'águas' entradas como oxigênios NUS, todo H descartado, e carga formal deixada em 0 (paridade impossível). Composição observada em produção: {Co:1, O:7, ...}, zero H.",
+  "atoms": [
+    { "element": "Co", "x": 0.0,  "y": 0.0,  "z": 0.0 },
+    { "element": "O",  "x": 2.10, "y": 0.0,  "z": 0.0 },
+    { "element": "O",  "x": -2.10,"y": 0.0,  "z": 0.0 },
+    { "element": "O",  "x": 0.0,  "y": 2.10, "z": 0.0 },
+    { "element": "O",  "x": 0.0,  "y": -2.10,"z": 0.0 }
+  ],
+  "charge": 0,
+  "spin_multiplicity": 4,
+  "ecp_elements": []
+}

@@ -1,0 +1,22 @@
+# Standalone crate — não faz parte do workspace da raiz (é um produto separado,
+# candidato a repositório próprio no GitHub).
+[workspace]
+
+[package]
+name = "nqf-lint"
+version = "0.1.0"
+edition = "2021"
+description = "Pre-flight linter for quantum-chemistry cluster/calculation setups — catches silent garbage-in before an SCF runs for hours and returns a wrong number."
+license = "MIT"
+
+[[bin]]
+name = "nqf-lint"
+path = "src/main.rs"
+
+[lib]
+name = "nqf_lint"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

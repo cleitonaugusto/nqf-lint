@@ -1,0 +1,13 @@
+{
+  "_comment": "Zn2+ é d10 (camada fechada) e DEVE ser singleto (M=1). Aqui foi declarado tripleto (M=3) — erro real de estado de spin, a mesma classe de bug que o benchmark de Ni cometeu ao rodar singleto onde não devia.",
+  "atoms": [
+    { "element": "Zn", "x": 0.0,  "y": 0.0,  "z": 0.0 },
+    { "element": "O",  "x": 2.10, "y": 0.0,  "z": 0.0 },
+    { "element": "H",  "x": 2.40, "y": 0.80, "z": 0.0 },
+    { "element": "H",  "x": 2.40, "y": -0.80,"z": 0.0 }
+  ],
+  "charge": 2,
+  "spin_multiplicity": 3,
+  "ecp_elements": [],
+  "metal_oxidation_state": 2
+}
