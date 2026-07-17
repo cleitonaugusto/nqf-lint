@@ -45,6 +45,7 @@ nqf-lint cluster.json
 | **bare heteroatom** | a C/N/O/P/S with no bonding partner in covalent range: waters entered as bare oxygens, dropped hydrogens, or a fragment sliced through a bond. |
 | **metal coordination** | a metal center with zero neighbours in range is floating — the fragment was built wrong. |
 | **metal spin state** | a closed-shell d¹⁰ cation (Zn²⁺, Hg²⁺, Cu⁺, …) declared open-shell. Only fires when the oxidation state is given and the ion is unambiguous; abstains for ligand-field-dependent ions like Ni²⁺. |
+d| **overlapping atoms** | two nuclei closer than 0.5 Å — below any real bond (H–H is 0.74 Å). A duplicated atom or a coordinate error that blows up the SCF or double-counts electrons. |
 
 **Python source (`.py`):**
 

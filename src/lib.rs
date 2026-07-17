@@ -344,6 +344,32 @@ fn check_metal_spin_state(spec: &ClusterSpec, out: &mut Vec<Finding>) {
     }
 }
 
+/// C5 — Overlapping atoms.
+///
+/// Two nuclei closer than 0.5 Å are not a chemical bond — the shortest real bond,
+/// H–H in dihydrogen, is 0.74 Å. A sub-0.5-Å pair is a duplicated atom or a
+/// coordinate error (e.g. a hydrogen written onto its parent heavy atom, or a
+/// fragment merged twice). Left in, it blows up the SCF or double-counts electrons.
+fn check_overlapping_atoms(spec: &ClusterSpec, out: &mut Vec<Finding>) {
+    const OVERLAP: f64 = 0.5;
+    let n = spec.atoms.len();
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let d = dist(&spec.atoms[i], &spec.atoms[j]);
+            if d < OVERLAP {
+                out.push(Finding::error(
+                    "overlapping-atoms",
+                    format!(
+                        "atoms {i} ({}) and {j} ({}) are {d:.3} Å apart — below any real \
+                         bond (H–H is 0.74 Å). Likely a duplicated atom or a coordinate error.",
+                        spec.atoms[i].element, spec.atoms[j].element
+                    ),
+                ));
+            }
+        }
+    }
+}
+
 /// Run every check and return all findings, most severe first.
 pub fn lint(spec: &ClusterSpec) -> Vec<Finding> {
     let mut out = Vec::new();
@@ -351,6 +377,7 @@ pub fn lint(spec: &ClusterSpec) -> Vec<Finding> {
     check_bare_heteroatom(spec, &mut out);
     check_metal_coordination(spec, &mut out);
     check_metal_spin_state(spec, &mut out);
+    check_overlapping_atoms(spec, &mut out);
     out.sort_by_key(|f| match f.severity {
         Severity::Error => 0,
         Severity::Warning => 1,
@@ -528,6 +555,44 @@ mod tests {
                 .any(|x| x.code == "metal-spin-state" && x.severity == Severity::Error),
             "Zn²⁺ triplet not caught: {f:?}"
         );
+    }
+
+    /// Two atoms written to (nearly) the same coordinates — a duplicated atom.
+    #[test]
+    fn overlapping_atoms_are_caught() {
+        let spec = ClusterSpec {
+            atoms: vec![
+                atom("Zn", 0.0, 0.0, 0.0),
+                atom("O", 2.10, 0.0, 0.0),
+                atom("O", 2.11, 0.0, 0.0), // 0.01 Å from the previous O — a duplicate
+                atom("H", 2.40, 0.80, 0.0),
+                atom("H", 2.40, -0.80, 0.0),
+            ],
+            charge: 2,
+            spin_multiplicity: 1,
+            ecp_elements: vec![],
+            metal_oxidation_state: None,
+        };
+        let f = lint(&spec);
+        assert!(
+            f.iter()
+                .any(|x| x.code == "overlapping-atoms" && x.severity == Severity::Error),
+            "overlapping O atoms not caught: {f:?}"
+        );
+    }
+
+    /// A normal O–H distance (0.96 Å) must NOT trip the overlap check.
+    #[test]
+    fn normal_bond_length_is_not_overlap() {
+        let spec = ClusterSpec {
+            atoms: vec![atom("O", 0.0, 0.0, 0.0), atom("H", 0.96, 0.0, 0.0)],
+            charge: 0,
+            spin_multiplicity: 1,
+            ecp_elements: vec![],
+            metal_oxidation_state: None,
+        };
+        let f = lint(&spec);
+        assert!(!f.iter().any(|x| x.code == "overlapping-atoms"));
     }
 
     /// An open-shell / ambiguous ion (Ni²⁺ d⁸) must NOT be flagged on spin —
