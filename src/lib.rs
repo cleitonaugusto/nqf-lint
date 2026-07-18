@@ -37,6 +37,11 @@ pub struct ClusterSpec {
     /// Elements carrying an effective core potential (ECP), e.g. ["Hg"].
     /// Their core electrons are replaced by the pseudopotential and must be
     /// subtracted from the electron count. Omit for all-electron calculations.
+    ///
+    /// NOTE: the electron-parity check assumes **LANL2DZ** core sizes. With a
+    /// different ECP (SDD, def2-ECP, …) the core count differs; the tool abstains
+    /// for elements it is unsure about, but for a known element on a non-LANL2DZ
+    /// ECP the parity verdict would be wrong. See the README "Limitations".
     #[serde(default)]
     pub ecp_elements: Vec<String>,
     /// Optional formal oxidation state of the (single) metal center. When given,
@@ -116,15 +121,19 @@ fn atomic_number(el: &str) -> Option<i64> {
         _ => return None,
     })
 }
-
-/// Core electrons replaced by the LANL2DZ ECP, for the heavy elements where the
-/// value is well established. Returns None when we are not confident — the caller
-/// must then abstain from the parity check rather than produce a false verdict.
+/// Core electrons replaced by the **LANL2DZ** ECP, for the heavy elements where
+/// the value is well established. Returns None when we are not confident — the
+/// caller then abstains from the parity check rather than produce a false verdict.
+///
+/// IMPORTANT: these counts are specific to LANL2DZ. A different pseudopotential
+/// (SDD, def2-ECP, …) replaces a different number of core electrons, so the parity
+/// verdict would be wrong. See the "Limitations" section of the README.
 fn lanl2dz_ecp_core(el: &str) -> Option<i64> {
     Some(match el {
-        // Third-row heavy elements: [Xe]4f14 = 60 core electrons.
-        "Hg" | "Au" | "Pb" | "Tl" | "Bi" | "Pt" | "Ir" => 60,
-        // Second-row transition / post-transition: [Ar]3d10 = 28.
+        // Third-row heavy elements: core [Kr]4d¹⁰4f¹⁴ = 36+10+14 = 60.
+        // (e.g. Hg Z=80 → 20 valence electrons: 5s²5p⁶5d¹⁰6s².)
+        "Hg" | "Au" | "Pt" | "Pb" => 60,
+        // Second-row: core [Ar]3d¹⁰ = 18+10 = 28.
         "Ag" | "Cd" | "I" => 28,
         _ => return None,
     })

@@ -45,7 +45,7 @@ nqf-lint cluster.json
 | **bare heteroatom** | a C/N/O/P/S with no bonding partner in covalent range: waters entered as bare oxygens, dropped hydrogens, or a fragment sliced through a bond. |
 | **metal coordination** | a metal center with zero neighbours in range is floating — the fragment was built wrong. |
 | **metal spin state** | a closed-shell d¹⁰ cation (Zn²⁺, Hg²⁺, Cu⁺, …) declared open-shell. Only fires when the oxidation state is given and the ion is unambiguous; abstains for ligand-field-dependent ions like Ni²⁺. |
-d| **overlapping atoms** | two nuclei closer than 0.5 Å — below any real bond (H–H is 0.74 Å). A duplicated atom or a coordinate error that blows up the SCF or double-counts electrons. |
+| **overlapping atoms** | two nuclei closer than 0.5 Å — below any real bond (H–H is 0.74 Å). A duplicated atom or a coordinate error that blows up the SCF or double-counts electrons. |
 
 **Python source (`.py`):**
 
@@ -68,11 +68,30 @@ A check that cannot demonstrate both directions does not ship.
 ## Build
 
 ```
-cargo test    # 6 tests, each a real bug
+cargo test    # 17 tests, each a real bug
 cargo build --release
 ./target/release/nqf-lint examples/bad_mining_cluster.json   # → 4 errors, exit 4
 ./target/release/nqf-lint examples/good_hg_cluster.json      # → clean, exit 0
 ```
+
+## Limitations
+
+This tool is deliberately narrow and states what it cannot verify.
+
+- **The electron-parity check assumes LANL2DZ core sizes.** With a different ECP
+  (SDD, def2-ECP, …) the number of replaced core electrons differs, and the parity
+  verdict would be wrong for a *known* element on a non-LANL2DZ ECP. For elements it
+  is unsure about, the tool abstains (a warning) rather than guess. If you use another
+  ECP, treat parity findings on those atoms as advisory and verify by hand.
+- **Bonding is judged by distance, not a real bond-perception model.** A terminal
+  metal-oxo/nitrido with an unusually long M=X bond (> 1.75 Å) could be flagged as a
+  "bare heteroatom". Rare, but possible.
+- **The conformer-seed check is a source-text heuristic, not a Python parser.** It
+  recognises the common seeding patterns (`randomSeed=` kwarg, `params.randomSeed =`);
+  an exotic way of setting the seed could be missed and reported as unseeded.
+
+The guiding rule is the opposite of the bug it exists to catch: when it cannot be
+sure, it says so, instead of emitting a confident wrong answer.
 
 ## License
 
