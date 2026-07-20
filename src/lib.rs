@@ -17,7 +17,9 @@
 use serde::Deserialize;
 
 pub mod source;
+pub mod xyz;
 pub use source::lint_python_source;
+pub use xyz::parse_xyz;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Atom {
@@ -30,10 +32,15 @@ pub struct Atom {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClusterSpec {
     pub atoms: Vec<Atom>,
-    /// Formal total charge of the cluster.
-    pub charge: i64,
-    /// Spin multiplicity M = 2S+1 (1 = singlet, 2 = doublet, 3 = triplet, ...).
-    pub spin_multiplicity: u32,
+    /// Formal total charge of the cluster. Optional: a bare geometry (e.g. an
+    /// .xyz with no charge in the comment line) omits it, and the electron-count
+    /// checks then abstain rather than assume a value.
+    #[serde(default)]
+    pub charge: Option<i64>,
+    /// Spin multiplicity M = 2S+1 (1 = singlet, 2 = doublet, ...). Optional for
+    /// the same reason as `charge`; when absent, spin-dependent checks abstain.
+    #[serde(default)]
+    pub spin_multiplicity: Option<u32>,
     /// Elements carrying an effective core potential (ECP), e.g. ["Hg"].
     /// Their core electrons are replaced by the pseudopotential and must be
     /// subtracted from the electron count. Omit for all-electron calculations.
@@ -172,6 +179,18 @@ fn nearest_neighbor(atoms: &[Atom], i: usize) -> f64 {
 /// electron count silently flips parity — the SCF then fails or converges to
 /// nonsense. Here the count is computed *with* the ECP core removed.
 fn check_electron_parity(spec: &ClusterSpec, out: &mut Vec<Finding>) {
+    // Abstain (never guess) when charge/spin are absent — a bare .xyz geometry
+    // carries neither, and inventing 0/singlet could produce a false verdict.
+    let (Some(charge), Some(mult)) = (spec.charge, spec.spin_multiplicity) else {
+        out.push(Finding::warn(
+            "electron-parity-abstain",
+            "electron parity not checked: charge and/or spin multiplicity not \
+             provided (a bare geometry omits them). Declare both to enable it."
+                .to_string(),
+        ));
+        return;
+    };
+
     let mut z_sum: i64 = 0;
     let mut unknown: Vec<String> = Vec::new();
     for a in &spec.atoms {
@@ -219,7 +238,7 @@ fn check_electron_parity(spec: &ClusterSpec, out: &mut Vec<Finding>) {
         return;
     }
 
-    let n_eff = z_sum - spec.charge - ecp_core_sum;
+    let n_eff = z_sum - charge - ecp_core_sum;
     if n_eff < 0 {
         out.push(Finding::error(
             "electron-count-negative",
@@ -227,7 +246,7 @@ fn check_electron_parity(spec: &ClusterSpec, out: &mut Vec<Finding>) {
         ));
         return;
     }
-    let m = spec.spin_multiplicity as i64;
+    let m = mult as i64;
     if m < 1 {
         out.push(Finding::error(
             "spin-multiplicity-invalid",
@@ -340,14 +359,17 @@ fn check_metal_spin_state(spec: &ClusterSpec, out: &mut Vec<Finding>) {
     if metals.len() != 1 {
         return; // ambiguous which metal the oxidation state refers to → abstain
     }
+    let Some(mult) = spec.spin_multiplicity else {
+        return; // spin not declared → abstain
+    };
     let metal = metals[0];
-    if requires_singlet(&metal.element, ox) == Some(true) && spec.spin_multiplicity != 1 {
+    if requires_singlet(&metal.element, ox) == Some(true) && mult != 1 {
         out.push(Finding::error(
             "metal-spin-state",
             format!(
                 "{}{:+} is a closed-shell d¹⁰ cation and must be a singlet (M=1), \
                  but multiplicity {} was declared.",
-                metal.element, ox, spec.spin_multiplicity
+                metal.element, ox, mult
             ),
         ));
     }
@@ -431,8 +453,8 @@ mod tests {
                 atom("H", -2.60, 0.80, 0.0),
                 atom("H", -2.60, -0.80, 0.0),
             ],
-            charge: 2,
-            spin_multiplicity: 1,
+            charge: Some(2),
+            spin_multiplicity: Some(1),
             ecp_elements: vec!["Hg".into()],
             metal_oxidation_state: Some(2),
         }
@@ -463,8 +485,8 @@ mod tests {
                 atom("O", -2.10, 0.0, 0.0), // bare
                 atom("O", 0.0, 2.10, 0.0),  // bare
             ],
-            charge: 2,
-            spin_multiplicity: 4, // Co²⁺ d⁷ high spin
+            charge: Some(2),
+            spin_multiplicity: Some(4), // Co²⁺ d⁷ high spin
             ecp_elements: vec![],
             metal_oxidation_state: Some(2), // Co²⁺ is open-shell → spin check abstains
         };
@@ -487,8 +509,8 @@ mod tests {
                 atom("H", 2.60, 0.80, 0.0),
                 atom("H", 2.60, -0.80, 0.0),
             ],
-            charge: 0,
-            spin_multiplicity: 2,
+            charge: Some(0),
+            spin_multiplicity: Some(2),
             ecp_elements: vec!["Hg".into()],
             metal_oxidation_state: None,
         };
@@ -510,8 +532,8 @@ mod tests {
                 atom("H", 5.3, 0.8, 0.0),
                 atom("H", 5.3, -0.8, 0.0),
             ],
-            charge: 2,
-            spin_multiplicity: 1,
+            charge: Some(2),
+            spin_multiplicity: Some(1),
             ecp_elements: vec![],
             metal_oxidation_state: None,
         };
@@ -532,8 +554,8 @@ mod tests {
                 atom("H", 2.6, 0.8, 0.0),
                 atom("H", 2.6, -0.8, 0.0),
             ],
-            charge: 3,
-            spin_multiplicity: 8,
+            charge: Some(3),
+            spin_multiplicity: Some(8),
             ecp_elements: vec!["Gd".into()],
             metal_oxidation_state: None,
         };
@@ -553,8 +575,8 @@ mod tests {
                 atom("H", 2.40, 0.80, 0.0),
                 atom("H", 2.40, -0.80, 0.0),
             ],
-            charge: 2,
-            spin_multiplicity: 3, // wrong: Zn²⁺ d¹⁰ is a singlet
+            charge: Some(2),
+            spin_multiplicity: Some(3), // wrong: Zn²⁺ d¹⁰ is a singlet
             ecp_elements: vec![],
             metal_oxidation_state: Some(2),
         };
@@ -577,8 +599,8 @@ mod tests {
                 atom("H", 2.40, 0.80, 0.0),
                 atom("H", 2.40, -0.80, 0.0),
             ],
-            charge: 2,
-            spin_multiplicity: 1,
+            charge: Some(2),
+            spin_multiplicity: Some(1),
             ecp_elements: vec![],
             metal_oxidation_state: None,
         };
@@ -595,8 +617,8 @@ mod tests {
     fn normal_bond_length_is_not_overlap() {
         let spec = ClusterSpec {
             atoms: vec![atom("O", 0.0, 0.0, 0.0), atom("H", 0.96, 0.0, 0.0)],
-            charge: 0,
-            spin_multiplicity: 1,
+            charge: Some(0),
+            spin_multiplicity: Some(1),
             ecp_elements: vec![],
             metal_oxidation_state: None,
         };
@@ -615,8 +637,8 @@ mod tests {
                 atom("H", 2.35, 0.80, 0.0),
                 atom("H", 2.35, -0.80, 0.0),
             ],
-            charge: 2,
-            spin_multiplicity: 1, // could be right (square-planar) — must not error
+            charge: Some(2),
+            spin_multiplicity: Some(1), // could be right (square-planar) — must not error
             ecp_elements: vec![],
             metal_oxidation_state: Some(2),
         };

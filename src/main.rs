@@ -7,7 +7,7 @@
 
 use std::process::exit;
 
-use nqf_lint::{error_count, lint, lint_python_source, ClusterSpec, Finding, Severity};
+use nqf_lint::{error_count, lint, lint_python_source, parse_xyz, ClusterSpec, Finding, Severity};
 
 fn main() {
     let path = match std::env::args().nth(1) {
@@ -15,6 +15,7 @@ fn main() {
         None => {
             eprintln!("usage: nqf-lint <file>");
             eprintln!("  <cluster.json>  lints a quantum-chemistry cluster spec");
+            eprintln!("  <geometry.xyz>  lints a standard XYZ geometry");
             eprintln!(
                 "  <script.py>     lints Python source for nondeterministic conformer embedding"
             );
@@ -30,9 +31,17 @@ fn main() {
         }
     };
 
-    // Dispatch by extension: .py → source checks, .json (or anything else) → cluster.
+    // Dispatch by extension: .py → source checks, .xyz → geometry, else JSON cluster.
     let findings: Vec<Finding> = if path.ends_with(".py") {
         lint_python_source(&text)
+    } else if path.ends_with(".xyz") {
+        match parse_xyz(&text) {
+            Ok(spec) => lint(&spec),
+            Err(e) => {
+                eprintln!("nqf-lint: {path} is not a valid XYZ file: {e}");
+                exit(2);
+            }
+        }
     } else {
         let spec: ClusterSpec = match serde_json::from_str(&text) {
             Ok(s) => s,

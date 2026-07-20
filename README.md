@@ -18,8 +18,27 @@ Every check corresponds to a real bug found in a production pipeline.
 ## Usage
 
 ```
-nqf-lint cluster.json
+nqf-lint geometry.xyz      # a standard XYZ geometry
+nqf-lint cluster.json      # the tool's own cluster spec (charge/spin/ECP)
+nqf-lint build_cluster.py  # Python source (conformer determinism)
 ```
+
+**XYZ** is the universal format every quantum-chemistry package reads and writes,
+so the linter runs on real inputs, not only its own JSON. XYZ carries no charge or
+spin, so put them on the comment line — either as a bare `<charge> <mult>` pair or
+as `charge=.. mult=..` — to enable the electron-count checks; without them, those
+checks abstain and the geometry checks still run.
+
+```
+3
+charge=0 mult=1
+O   0.000   0.000   0.000
+H   0.757   0.586   0.000
+H  -0.757   0.586   0.000
+```
+
+The **JSON** spec adds what XYZ cannot express — the ECP list and the metal
+oxidation state — for the ECP-aware parity and d¹⁰ spin checks:
 
 ```json
 {
@@ -37,7 +56,11 @@ nqf-lint cluster.json
 
 ## What it checks
 
-**Cluster spec (`.json`):**
+The geometry checks (bare heteroatom, metal coordination, overlapping atoms) run
+on any input — `.xyz` or `.json`. The electron-count checks need charge/spin, and
+the ECP/d¹⁰ checks need the extra fields only `.json` carries.
+
+**Geometry + electron count:**
 
 | check | catches |
 |---|---|
@@ -68,10 +91,12 @@ A check that cannot demonstrate both directions does not ship.
 ## Build
 
 ```
-cargo test    # 17 tests, each a real bug
+cargo test    # 23 tests, each a real bug
 cargo build --release
 ./target/release/nqf-lint examples/bad_mining_cluster.json   # → 4 errors, exit 4
 ./target/release/nqf-lint examples/good_hg_cluster.json      # → clean, exit 0
+./target/release/nqf-lint examples/bad_floating_metal.xyz    # → 2 errors, exit 2
+./target/release/nqf-lint examples/water.xyz                 # → clean, exit 0
 ```
 
 ## Limitations
