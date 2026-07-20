@@ -401,6 +401,40 @@ fn check_overlapping_atoms(spec: &ClusterSpec, out: &mut Vec<Finding>) {
     }
 }
 
+/// C6 — Coordinate unit sanity (Ångström vs Bohr).
+///
+/// Like most tools, nqf-lint assumes Ångström. A classic footgun is coordinates
+/// written in Bohr (atomic units, 1 Bohr = 0.529177 Å) read as Ångström, which
+/// inflates every distance ~1.89×. Hydrogen is the tell: an X–H covalent bond is
+/// ~1.0 Å in *every* molecule, so if even the closest hydrogen sits well beyond
+/// that, the whole geometry is too sparse to be Ångström — almost always Bohr.
+///
+/// Anchored on hydrogen precisely to avoid false positives: metal–ligand and long
+/// heavy–heavy bonds vary a lot (2.0–2.5 Å is normal), but X–H does not. A
+/// warning, not an error, since it is a diagnosis of intent, not an impossibility.
+fn check_unit_scale(spec: &ClusterSpec, out: &mut Vec<Finding>) {
+    let h_min = spec
+        .atoms
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| a.element == "H")
+        .map(|(i, _)| nearest_neighbor(&spec.atoms, i))
+        .fold(f64::INFINITY, f64::min);
+    // 1.5 Å is safely above any real X–H bond (≤ ~1.2 Å) and below the Bohr-inflated
+    // value (~1.0 Å × 1.89 ≈ 1.9 Å). Requires ≥ 2 atoms for a distance to exist.
+    if h_min.is_finite() && h_min > 1.5 {
+        out.push(Finding::warn(
+            "unit-scale",
+            format!(
+                "closest hydrogen bond is {h_min:.2} Å — longer than any real X–H bond \
+                 (~1.0 Å). The geometry is likely in Bohr (×0.529 → {:.2} Å), not the \
+                 Ångström this tool assumes. Convert the coordinates, or verify the units.",
+                h_min * 0.529177
+            ),
+        ));
+    }
+}
+
 /// Run every check and return all findings, most severe first.
 pub fn lint(spec: &ClusterSpec) -> Vec<Finding> {
     let mut out = Vec::new();
@@ -409,6 +443,7 @@ pub fn lint(spec: &ClusterSpec) -> Vec<Finding> {
     check_metal_coordination(spec, &mut out);
     check_metal_spin_state(spec, &mut out);
     check_overlapping_atoms(spec, &mut out);
+    check_unit_scale(spec, &mut out);
     out.sort_by_key(|f| match f.severity {
         Severity::Error => 0,
         Severity::Warning => 1,
@@ -644,5 +679,61 @@ mod tests {
         };
         let f = lint(&spec);
         assert!(!f.iter().any(|x| x.code == "metal-spin-state"));
+    }
+
+    /// A geometry whose coordinates are in Bohr (water × 1.889) — every distance
+    /// is inflated ~1.89×, so the O–H "bond" reads as ~1.81 Å. Must be flagged.
+    #[test]
+    fn bohr_coordinates_are_flagged() {
+        let s = 1.889726; // Å → Bohr
+        let spec = ClusterSpec {
+            atoms: vec![
+                atom("O", 0.0, 0.0, 0.0),
+                atom("H", 0.757 * s, 0.586 * s, 0.0),
+                atom("H", -0.757 * s, 0.586 * s, 0.0),
+            ],
+            charge: None,
+            spin_multiplicity: None,
+            ecp_elements: vec![],
+            metal_oxidation_state: None,
+        };
+        let f = lint(&spec);
+        assert!(
+            f.iter().any(|x| x.code == "unit-scale"),
+            "Bohr coordinates not flagged: {f:?}"
+        );
+    }
+
+    /// The same water in Ångström must NOT trigger the unit check (no false alarm).
+    #[test]
+    fn angstrom_coordinates_are_not_flagged() {
+        let spec = ClusterSpec {
+            atoms: vec![
+                atom("O", 0.0, 0.0, 0.0),
+                atom("H", 0.757, 0.586, 0.0),
+                atom("H", -0.757, 0.586, 0.0),
+            ],
+            charge: None,
+            spin_multiplicity: None,
+            ecp_elements: vec![],
+            metal_oxidation_state: None,
+        };
+        let f = lint(&spec);
+        assert!(!f.iter().any(|x| x.code == "unit-scale"));
+    }
+
+    /// A hydrogen-free metal cluster must not trip the unit check — it abstains
+    /// (metal–ligand distances alone are not a reliable unit signal).
+    #[test]
+    fn unit_check_abstains_without_hydrogen() {
+        let spec = ClusterSpec {
+            atoms: vec![atom("Zn", 0.0, 0.0, 0.0), atom("Cl", 2.2, 0.0, 0.0)],
+            charge: Some(1),
+            spin_multiplicity: Some(1),
+            ecp_elements: vec![],
+            metal_oxidation_state: None,
+        };
+        let f = lint(&spec);
+        assert!(!f.iter().any(|x| x.code == "unit-scale"));
     }
 }

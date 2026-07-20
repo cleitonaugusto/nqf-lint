@@ -69,6 +69,7 @@ the ECP/d¹⁰ checks need the extra fields only `.json` carries.
 | **metal coordination** | a metal center with zero neighbours in range is floating — the fragment was built wrong. |
 | **metal spin state** | a closed-shell d¹⁰ cation (Zn²⁺, Hg²⁺, Cu⁺, …) declared open-shell. Only fires when the oxidation state is given and the ion is unambiguous; abstains for ligand-field-dependent ions like Ni²⁺. |
 | **overlapping atoms** | two nuclei closer than 0.5 Å — below any real bond (H–H is 0.74 Å). A duplicated atom or a coordinate error that blows up the SCF or double-counts electrons. |
+| **unit scale (Å vs Bohr)** | coordinates in Bohr (1 Bohr = 0.529 Å) read as Ångström, inflating every distance ~1.89×. Anchored on hydrogen (an X–H bond is ~1.0 Å in every molecule): if the closest H sits > 1.5 Å from any atom, the geometry is almost certainly Bohr. Reports the converted value. |
 
 **Python source (`.py`):**
 
@@ -91,11 +92,12 @@ A check that cannot demonstrate both directions does not ship.
 ## Build
 
 ```
-cargo test    # 23 tests, each a real bug
+cargo test    # 26 tests, each a real bug
 cargo build --release
 ./target/release/nqf-lint examples/bad_mining_cluster.json   # → 4 errors, exit 4
 ./target/release/nqf-lint examples/good_hg_cluster.json      # → clean, exit 0
 ./target/release/nqf-lint examples/bad_floating_metal.xyz    # → 2 errors, exit 2
+./target/release/nqf-lint examples/bad_bohr_units.xyz        # → flags Bohr units
 ./target/release/nqf-lint examples/water.xyz                 # → clean, exit 0
 ```
 

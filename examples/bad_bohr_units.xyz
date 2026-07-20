@@ -1,0 +1,5 @@
+3
+water written in Bohr (atomic units) instead of Angstrom — a classic footgun
+O    0.00000   0.00000   0.0
+H    1.43044   1.10738   0.0
+H   -1.43044   1.10738   0.0
